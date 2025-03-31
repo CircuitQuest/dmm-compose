@@ -13,7 +13,8 @@ services:
     device_cgroup_rules:
       - 'c 10:200 rwm'
     environment:
-      - WARP_SLEEP=2
+      <<: *common-env
+      WARP_SLEEP: 2
     cap_add:
       # additional required cap for warp, both for podman and docker
       - NET_ADMIN
@@ -27,6 +28,8 @@ services:
   zurg:
     image: ghcr.io/debridmediamanager/zurg-testing:latest
     container_name: zurg
+    environment:
+      <<: *common-env
     healthcheck:
       test: curl -f localhost:9999/dav/version.txt || exit 1
       interval: 10s
@@ -182,6 +185,7 @@ services:
     restart: unless-stopped
     shm_size: 2G
     environment:
+      <<: *common-env
       PGDATA: /var/lib/postgresql/data/pgdata
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: "uzw2grw-rvz6cte3BGE"
