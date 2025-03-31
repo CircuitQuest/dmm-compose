@@ -1,0 +1,280 @@
+x-common-env: &common-env
+  PUID: 1000
+  PGID: 1000
+  TZ: "Asia/Jakarta"
+  UMASK: 002
+
+services:
+  warp:
+    image: caomingjun/warp
+    container_name: warp
+    restart: always
+    # add removed rule back (https://github.com/opencontainers/runc/pull/3468)
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      # additional required cap for warp, both for podman and docker
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - /home/dmm/warp:/var/lib/cloudflare-warp
+  zurg:
+    image: ghcr.io/debridmediamanager/zurg-testing:latest
+    container_name: zurg
+    healthcheck:
+      test: curl -f localhost:9999/dav/version.txt || exit 1
+      interval: 10s
+      retries: 3
+      start_period: 40s
+      timeout: 5s
+    ports:
+      - 9999:9999
+    volumes:
+      - /home/dmm/zurg/config.yml:/app/config.yml
+      - /home/dmm/zurg/data:/app/data
+    restart: unless-stopped
+
+  rclone:
+    image: rclone/rclone:latest
+    container_name: rclone
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    volumes:
+      - /mnt/remote/realdebrid:/data:rshared
+      - /home/dmm/rclone/cache:/cache
+      - /home/dmm/rclone/config.conf:/config/rclone/rclone.conf
+      - /home/dmm/rclone/log/:/log/
+      - /mnt:/mnt
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    healthcheck:
+     test: sh -c "[ -f /data/version.txt ]"
+     interval: 10s
+     retries: 3
+     start_period: 20s
+     timeout: 5s
+    depends_on:
+      zurg:
+        condition: service_healthy
+        restart: true
+    command: >
+      mount zurg: /data
+      --allow-non-empty
+      --allow-other
+      --uid=1000
+      --gid=1000
+      --umask=002
+      --log-level=INFO
+      --log-file=/log/rclone.log
+      --dir-cache-time=10s
+      --cache-dir=/cache
+      --vfs-cache-mode=full
+      --vfs-cache-max-size=24G
+      --vfs-cache-min-free-space=8G
+      --vfs-read-ahead=32M
+  decypharr:
+    image: cy01/blackhole:latest
+    container_name: decypharr
+    ports:
+      - "8282:8282"  # qBittorrent API port
+    user: "1000:1000"
+    volumes:
+      - /home/dmm/decypharr:/app
+      - /mnt:/mnt
+    environment:
+      <<: *common-env
+      UMASK: 002
+      QBIT_PORT: 8282
+      PORT: 8181
+    depends_on:
+      rclone:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+
+  prowlarr:
+    container_name: prowlarr
+    image: lscr.io/linuxserver/prowlarr:latest
+    ports:
+      - 9696:9696
+    environment:
+      <<: *common-env
+    volumes:
+      - /home/dmm/prowlarr:/config
+    restart: unless-stopped
+
+  comet:
+    container_name: comet
+    image: g0ldyy/comet
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      ADDON_ID: stremio.comet.fast
+      ADDON_NAME: Comet
+      FASTAPI_HOST: 0.0.0.0
+      FASTAPI_PORT: 8000
+      FASTAPI_WORKERS: 1
+      DATABASE_TYPE: sqlite
+      DATABASE_PATH: data/comet.db
+      METADATA_CACHE_TTL: 2592000
+      TORRENT_CACHE_TTL: 1296000
+      DEBRID_CACHE_TTL: 86400
+      SCRAPE_COMET: true
+      COMET_URL: https://comet.elfhosted.com
+      SCRAPE_ZILEAN: true
+      ZILEAN_URL: http://zilean:8181
+      SCRAPE_TORRENTIO: true
+      TORRENTIO_URL: https://torrentio.strem.fun
+      SCRAPE_MEDIAFUSION: true
+      MEDIAFUSION_URL: https://mediafusion.elfhosted.com
+      REMOVE_ADULT_CONTENT: False
+      CUSTOM_HEADER_HTML: None
+      STREMTHRU_URL: https://stremthru.13377001.xyz
+      DEBRID_PROXY_URL: http://warp:1080
+    env_file:
+      - stack.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - /home/dmm/comet:/app/data
+    healthcheck:
+      test: wget -qO- http://127.0.0.1:8000/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  zilean:
+    image: ipromknight/zilean:latest
+    restart: unless-stopped
+    container_name: zilean
+    tty: true
+    environment:
+      <<: *common-env
+    ports:
+      - "8181:8181"
+    volumes:
+      - /home/dmm/zilean/data:/app/data
+      - /home/dmm/zilean/tmp:/tmp
+    healthcheck:
+      test: curl --connect-timeout 10 --silent --show-error --fail http://localhost:8181/healthchecks/ping
+      timeout: 60s
+      interval: 30s
+      retries: 10
+    depends_on:
+      zilean-postgres:
+        condition: service_healthy
+
+  zilean-postgres:
+    image: postgres:17.2-alpine
+    container_name: zilean-postgres
+    restart: unless-stopped
+    shm_size: 2G
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "uzw2grw-rvz6cte3BGE"
+      POSTGRES_DB: zilean
+    volumes:
+      - /home/dmm/zilean/db:/var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  radarr:
+    container_name: radarr
+    environment:
+      <<: *common-env
+    ports:
+      - 7878:7878/tcp
+    hostname: radarr
+    image: ghcr.io/hotio/radarr:release
+    restart: unless-stopped
+    volumes:
+      - /mnt:/mnt
+      - /home/dmm/radarr:/config
+      - /home/dmm/scripts:/scripts
+      - /usr/bin/rclone:/usr/bin/rclone
+    depends_on:
+      rclone:
+        condition: service_healthy
+        restart: true
+
+  sonarr:
+    container_name: sonarr
+    environment:
+      <<: *common-env
+    ports:
+      - 8989:8989/tcp
+    hostname: sonarr
+    image: ghcr.io/hotio/sonarr:release
+    restart: unless-stopped
+    volumes:
+      - /mnt:/mnt
+      - /home/dmm/scripts:/scripts
+      - /home/dmm/sonarr:/config
+      - /usr/bin/rclone:/usr/bin/rclone
+    depends_on:
+      rclone:
+        condition: service_healthy
+        restart: true
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      <<: *common-env
+      LOG_LEVEL: debug
+      PORT: 5055
+    ports:
+      - 5055:5055
+    volumes:
+      - /home/dmm/jellyseerr:/app/config
+    restart: unless-stopped
+
+  jellyfin:
+    container_name: jellyfin
+    image: ghcr.io/hotio/jellyfin
+    ports:
+      - "8096:8096"
+    environment:
+      <<: *common-env
+    volumes:
+      - /home/dmm/jellyfin:/config
+      - /dev/shm:/dev/shm
+      - /mnt:/mnt
+      - /home/dmm/scripts:/scripts
+    restart: unless-stopped
+    depends_on:
+      rclone:
+        condition: service_healthy
+        restart: true
+
+  npmplus:
+    container_name: npmplus
+    image: ghcr.io/zoeyvid/npmplus:latest
+    restart: always
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - "/home/dmm/npmplus:/data"
+    environment:
+      <<: *common-env
+      LOGROTATE: true
+      GOA: true
