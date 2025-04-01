@@ -297,5 +297,3 @@ services:
       - /home/dmm/caddy:/etc/caddy
       - caddy_config:/config
       - caddy_data:/data
-      LOGROTATE: true
-      GOA: true
