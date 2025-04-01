@@ -267,18 +267,35 @@ services:
         condition: service_healthy
         restart: true
 
-  npmplus:
-    container_name: npmplus
-    image: ghcr.io/zoeyvid/npmplus:latest
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
     restart: always
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM caddy:builder-alpine AS builder
+
+        RUN CGO_ENABLED=1 \
+            xcaddy build \
+            --with github.com/dunglas/caddy-cbrotli \
+            --with github.com/caddy-dns/cloudflare \
+            --with github.com/mastercactapus/caddy2-proxyprotocol
+        
+        FROM caddy:alpine
+        
+        COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+    cap_add:
+      - NET_ADMIN
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
-      - "81:81"
-      - "443:443/tcp"
+      - "443:443"
       - "443:443/udp"
     volumes:
-      - "/home/dmm/npmplus:/data"
-    environment:
-      <<: *common-env
+      - /home/dmm/caddy:/etc/caddy
+      - caddy_config:/config
+      - caddy_data:/data
       LOGROTATE: true
       GOA: true
