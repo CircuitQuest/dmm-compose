@@ -297,3 +297,7 @@ services:
       - /home/dmm/caddy:/etc/caddy
       - caddy_config:/config
       - caddy_data:/data
+
+volumes:
+  caddy_data:
+  caddy_config:
