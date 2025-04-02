@@ -282,6 +282,7 @@ services:
             --with github.com/caddy-dns/cloudflare
         
         FROM caddy:alpine
+        RUN apk --no-cache add brotli-libs
         COPY --from=builder /usr/bin/caddy /usr/bin/caddy
     cap_add:
       - NET_ADMIN
