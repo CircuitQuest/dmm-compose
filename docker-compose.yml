@@ -275,7 +275,7 @@ services:
       context: .
       dockerfile_inline: |
         FROM caddy:builder-alpine AS builder
-
+        RUN apk add build-base
         RUN CGO_ENABLED=1 \
             xcaddy build \
             --with github.com/dunglas/caddy-cbrotli \
@@ -283,7 +283,6 @@ services:
             --with github.com/mastercactapus/caddy2-proxyprotocol
         
         FROM caddy:alpine
-        
         COPY --from=builder /usr/bin/caddy /usr/bin/caddy
     cap_add:
       - NET_ADMIN
