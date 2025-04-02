@@ -286,6 +286,10 @@ services:
         COPY --from=builder /usr/bin/caddy /usr/bin/caddy
     cap_add:
       - NET_ADMIN
+    env_file:
+      - stack.env
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
