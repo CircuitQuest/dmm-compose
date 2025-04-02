@@ -268,7 +268,7 @@ services:
         restart: true
 
   caddy:
-    image: caddy:alpine
+    image: caddy:alpine-custom
     container_name: caddy
     restart: always
     build:
