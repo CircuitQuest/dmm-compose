@@ -279,8 +279,7 @@ services:
         RUN CGO_ENABLED=1 \
             xcaddy build \
             --with github.com/dunglas/caddy-cbrotli \
-            --with github.com/caddy-dns/cloudflare \
-            --with github.com/mastercactapus/caddy2-proxyprotocol
+            --with github.com/caddy-dns/cloudflare
         
         FROM caddy:alpine
         COPY --from=builder /usr/bin/caddy /usr/bin/caddy
