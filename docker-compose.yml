@@ -275,7 +275,7 @@ services:
       context: .
       dockerfile_inline: |
         FROM caddy:builder-alpine AS builder
-        RUN apk add build-base
+        RUN apk add brotli-dev brotli-static build-base
         RUN CGO_ENABLED=1 \
             xcaddy build \
             --with github.com/dunglas/caddy-cbrotli \
