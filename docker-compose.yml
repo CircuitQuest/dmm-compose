@@ -85,8 +85,7 @@ services:
       --vfs-cache-min-free-space=8G
       --vfs-read-ahead=32M
   decypharr:
-    image: cy01/blackhole:dev
-    build: https://github.com/CircuitQuest/debrid-blackhole.git#rd-uncached
+    image: cy01/blackhole:latest
     container_name: decypharr
     user: "1000:1000"
     volumes:
